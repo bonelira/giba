@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contador de Horas de Estágio</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 2rem;
+      background-color: #f9f9f9;
+      color: #333;
+    }
+    h1 {
+      text-align: center;
+    }
+    .container {
+      max-width: 700px;
+      margin: auto;
+      padding: 1rem;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    label {
+      display: block;
+      margin-top: 1rem;
+    }
+    input, textarea, select {
+      width: 100%;
+      padding: 0.5rem;
+      margin-top: 0.25rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      margin-top: 1.5rem;
+      padding: 0.5rem 1rem;
+      background: #007BFF;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #0056b3;
+    }
+    .result {
+      margin-top: 2rem;
+      background: #eef;
+      padding: 1rem;
+      border-radius: 4px;
+    }
+    .calendar input[type="date"] {
+      margin-top: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Contador de Horas de Estágio</h1>
+
+  <label>Data de Início:
+    <input type="date" id="startDate">
+  </label>
+
+  <label>Data de Fim:
+    <input type="date" id="endDate">
+  </label>
+
+  <label>Carga horária total obrigatória:
+    <input type="number" id="targetHours" value="240" min="1"> horas
+  </label>
+
+  <label>Horas por dia útil (default: 6h máx por dia, mín 0.5h):</label>
+  <textarea id="weeklySchedule" rows="6">segunda:6
+terça:6
+quarta:6
+quinta:6
+sexta:6
+sábado:0
+domingo:0</textarea>
+
+  <label>Feriados (ex: "Ano Novo 01 janeiro\nCarnaval 28 fevereiro a 01 março"):</label>
+  <textarea id="feriados" rows="5"></textarea>
+
+  <label>Feriados manuais (clique para adicionar):</label>
+  <div class="calendar">
+    <input type="date" id="manualHoliday">
+    <ul id="manualList"></ul>
+  </div>
+
+  <button onclick="calcularHoras()">Calcular</button>
+
+  <div class="result" id="resultado"></div>
+</div>
+
+<script>
+  const manualFeriados = new Set();
+  document.getElementById("manualHoliday").addEventListener("change", e => {
+    const date = e.target.value;
+    if (date && !manualFeriados.has(date)) {
+      manualFeriados.add(date);
+      const li = document.createElement("li");
+      li.textContent = date;
+      document.getElementById("manualList").appendChild(li);
+    }
+  });
+
+  function parseFeriados(texto) {
+    const meses = {
+      janeiro: 0, fevereiro: 1, março: 2, abril: 3, maio: 4,
+      junho: 5, julho: 6, agosto: 7, setembro: 8,
+      outubro: 9, novembro: 10, dezembro: 11
+    };
+    const feriados = new Set();
+    const linhas = texto.split(/\n+/);
+    for (const linha of linhas) {
+      const match = linha.match(/(\d{2}) (\w+)(?: a (\d{2}) (\w+))?/);
+      if (match) {
+        let [_, d1, m1, d2, m2] = match;
+        d1 = parseInt(d1);
+        const mes1 = meses[m1.toLowerCase()];
+        if (d2 && m2) {
+          d2 = parseInt(d2);
+          const mes2 = meses[m2.toLowerCase()];
+          const dataIni = new Date(new Date().getFullYear(), mes1, d1);
+          const dataFim = new Date(new Date().getFullYear(), mes2, d2);
+          for (let d = new Date(dataIni); d <= dataFim; d.setDate(d.getDate() + 1)) {
+            feriados.add(d.toISOString().slice(0, 10));
+          }
+        } else {
+          const data = new Date(new Date().getFullYear(), mes1, d1);
+          feriados.add(data.toISOString().slice(0, 10));
+        }
+      }
+    }
+    return feriados;
+  }
+
+  function calcularHoras() {
+    const start = new Date(document.getElementById("startDate").value);
+    const end = new Date(document.getElementById("endDate").value);
+    const alvo = parseFloat(document.getElementById("targetHours").value);
+    const horario = document.getElementById("weeklySchedule").value.split("\n").reduce((acc, linha) => {
+      const [dia, horas] = linha.split(":");
+      acc[dia.trim().toLowerCase()] = Math.min(6, Math.max(0.5, parseFloat(horas)));
+      return acc;
+    }, {});
+    const feriadosTexto = parseFeriados(document.getElementById("feriados").value);
+    const diasSemana = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+    
+    let totalHoras = 0;
+    const todosFeriados = new Set([...feriadosTexto, ...manualFeriados]);
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const iso = d.toISOString().slice(0, 10);
+      if (todosFeriados.has(iso)) continue;
+      const dia = diasSemana[d.getDay()];
+      totalHoras += horario[dia] || 0;
+    }
+
+    const restante = Math.max(0, alvo - totalHoras);
+    document.getElementById("resultado").innerHTML =
+      `<strong>Total acumulado:</strong> ${totalHoras.toFixed(2)} horas<br>
+       <strong>Horas restantes:</strong> ${restante.toFixed(2)} horas`;
+  }
+</script>
+</body>
+</html>
